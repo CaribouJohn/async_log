@@ -7,97 +7,106 @@
 #include <iostream>
 #include <array>
 #include <vector>
-#include <mutex>
-#include <condition_variable>
+#include <sstream>
+#include <variant>
+
+#include "circular_buffer.h"
+#include "event.h"
 
 namespace async_logger
 {
-    class Event
-    {
-    private:
-        std::mutex mtx;
-        std::condition_variable cv;
 
-    public:
-        Event() = default;
-        ~Event() = default;
+    // struct LogTask
+    // {
+    //     std::string format;
+    //     std::tuple<> args; // Tuple of strings
 
-        void fired()
-        {
-            std::unique_lock<std::mutex> lock(mtx);
-            cv.notify_all();
-        }
+    //     // Constructor
+    //     LogTask() = default;
 
-        void wait()
-        {
-            std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock);
-        }
-    };
+    //     template <typename... Args>
+    //     LogTask(int log_level, const char* fmt, Args&&... arguments)
+    //         : format()
+    //     {
+    //         // Get thread ID
+    //         auto thread_id = std::this_thread::get_id();
 
-    // I need a lock free circular buffer to store messages
-    template <typename T, int buffer_size>
-    class CircularBuffer
-    {
-        static_assert(buffer_size > 0, "Size of CircularBuffer must be greater than 0");
+    //         // Get current time
+    //         auto now = std::chrono::system_clock::now();
+    //         auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    //         char time_buffer[20];
+    //         std::tm local_time;
+    //         localtime_s(&local_time, &now_time_t);
+    //         std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", &local_time);
 
-    private:
-        std::array<T, buffer_size> buffer;
-        std::mutex bufferMutex;
+    //         // Create metadata string
+    //         std::ostringstream metadata;
+    //         metadata << "[" << time_buffer << "] [Thread " << thread_id << "] [" << log_level << "] ";
 
-        size_t head;
-        size_t tail;
+    //         // Combine metadata with the user-provided format
+    //         format = metadata.str() + fmt;
+    //     }
 
-    public:
-        CircularBuffer() : head(0), tail(0) {};
-        ~CircularBuffer() = default;
+    //     // Move constructor
+    //     LogTask(LogTask&& other) noexcept
+    //         : format(std::move(other.format)), args(std::move(other.args))
+    //     {}
 
-        void push(T item)
-        {
-            // using a mutex to lock the push operation
-            std::lock_guard<std::mutex> lock(bufferMutex);
-            buffer[head] = item;
-            head = (head + 1) % buffer.size();
-        }
+    //     // Move assignment operator
+    //     LogTask& operator=(LogTask&& other) noexcept
+    //     {
+    //         if (this != &other)
+    //         {
+    //             format = std::move(other.format);
+    //             args = std::move(other.args);
+    //         }
+    //         return *this;
+    //     }
 
-        T pop()
-        {
-            // using a mutex to lock the pop operation
-            std::lock_guard<std::mutex> lock(bufferMutex);
-            T item = buffer[tail];
-            tail = (tail + 1) % buffer.size();
-            return item;
-        }
+    //     // Delete copy constructor and copy assignment operator to avoid accidental copies
+    //     LogTask(const LogTask&) = delete;
+    //     LogTask& operator=(const LogTask&) = delete;
 
-        bool empty()
-        {
-            return head == tail;
-        }
+    //     // Convert to string for logging
+    //     std::string to_string()
+    //     {
+    //         std::ostringstream oss;
+    //         oss << format;
 
-        bool full()
-        {
-            return (head + 1) % buffer.size() == tail;
-        }
+    //         std::apply(
+    //             [&oss](const auto&... tupleArgs)
+    //             {
+    //                 ((oss << " " << tupleArgs), ...); // Append each tuple element to the stream
+    //             },
+    //             args);
 
-        size_t buffer_size()
-        {
-            // calculate the number of items to dequeue
-            // the number will depend on where head and tail
-            // are in the buffer
-            // if head is ahead of tail, then head - tail
-            // if tail is ahead of head, then buffer_size - tail + head
-            size_t queuedItems = 0;
-            if (head >= tail)
-            {
-                queuedItems = head - tail;
-            }
-            else
-            {
-                queuedItems = buffer.size() - tail + head;
-            }
-            return queuedItems;
-        }
-    };
+    //         return oss.str();
+    //     }
+
+    // private:
+    //     // Helper to convert arguments to a tuple of strings
+    //     template <typename... Args>
+    //     static std::tuple<std::string> convert_to_tuple(Args&&... arguments)
+    //     {
+    //         return std::make_tuple(to_string(std::forward<Args>(arguments))...);
+    //     }
+
+    //     // Helper to convert a single argument to a string
+    //     template <typename T>
+    //     static std::string to_string(T&& value)
+    //     {
+    //         if constexpr (std::is_arithmetic_v<std::decay_t<T>>)
+    //         {
+    //             return std::to_string(value);
+    //         }
+    //         else
+    //         {
+    //             std::ostringstream oss;
+    //             oss << std::forward<T>(value);
+    //             return oss.str();
+    //         }
+    //     }
+    // };
 
     class Logger
     {
@@ -107,59 +116,44 @@ namespace async_logger
         bool shutdown = false;
 
         // queue to store messages
-        CircularBuffer<std::string, 1000> queue;
+        CircularBuffer<std::array<char,4096>,100> queue;
         Event queueEmpty;
 
     public:
         Logger() = default;
         ~Logger() = default;
 
-        void start_logger()
-        {
-            consumer = std::thread(&Logger::consumer_thread, this);
-        }
-
-        void stop_logger()
-        {
-            log("Stopping logger, processing items in queue");
-            queueEmpty.wait();
-            log("Queue Drained");
-            shutdown = true;
-            consumer.join();
-        }
-
+        void start_logger();
+        void stop_logger();
         template <typename... Args>
-        void log(char const *format, Args &&...args)
+        void log(int log_level, char const* fmt, Args &&...args)
         {
-            // format the message and push it to the queue
-            // get the time to nano seconds, threadid, and the message
-            auto now = std::chrono::system_clock::now();
-            auto now_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(now);
+            std::array<char, 4096> buffer;
+            // Get thread ID
+            auto thread_id = std::this_thread::get_id();
 
-            // use snprintf to format the message
-            // and push it to the queue
-            auto size = snprintf(nullptr, 0, format, args...) + 1;
-            std::string message(size, '\0');
-            snprintf(&message[0], size, format, args...);
-            queue.push(message);
+            // Get current time
+            auto now = std::chrono::system_clock::now();
+            auto now_time_t = std::chrono::system_clock::to_time_t(now);
+            char time_buffer[20];
+            std::tm local_time;
+            localtime_s(&local_time, &now_time_t);
+            std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", &local_time);
+
+            // Create metadata string
+            std::ostringstream metadata;
+            metadata << "[" << time_buffer << "] [Thread " << thread_id << "] [" << log_level << "] ";
+
+            // Combine metadata with the user-provided format
+            auto format = metadata.str() + fmt;
+            size_t size = snprintf(nullptr, 0, format.c_str(), args...) + 1;            
+            snprintf(buffer.data(), size, format.c_str(), args...);
+            queue.push(buffer);
         }
 
     private:
-        void consumer_thread()
-        {
-            while (!shutdown)
-            {
-                if (queue.empty())
-                {
-                    queueEmpty.fired();
-                    std::this_thread::yield();
-                }
-                else
-                {
-                    std::cout << queue.pop() << std::endl;
-                }
-            }
-        }
+        void consumer_thread();
+
     };
 
 }

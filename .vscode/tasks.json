@@ -3,7 +3,7 @@
   "tasks": [
     {
       "type": "shell",
-      "label": "build",
+      "label": "build-local",
       "command": "cmake",
       "args": [
         "--build",

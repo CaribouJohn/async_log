@@ -1,5 +1,7 @@
 {
   "files.associations": {
+    "*.c": "cpp",
+    "*.TRC": "log",
     "atomic": "cpp",
     "memory": "cpp",
     "array": "cpp",
@@ -52,6 +54,13 @@
     "thread": "cpp",
     "mutex": "cpp",
     "condition_variable": "cpp",
-    "vector": "cpp"
-  }
+    "vector": "cpp",
+    "cstdarg": "cpp",
+    "ratio": "cpp",
+    "sstream": "cpp",
+    "stop_token": "cpp",
+    "string": "cpp",
+    "variant": "cpp",
+    "xstddef": "cpp"
+}
 }

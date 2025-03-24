@@ -8,7 +8,7 @@
       "program": "${workspaceFolder}/build/Debug/async_logger_test.exe",
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
-      "preLaunchTask": "build"
+      "preLaunchTask": "build-local"
     }
   ]
 }
