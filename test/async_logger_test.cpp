@@ -17,19 +17,17 @@ int main()
     std::random_device rd; // Seed
     std::mt19937 gen(rd()); // Mersenne Twister generator
     std::uniform_int_distribution<> dist(0, 99); // Range [0, 99]
-    std::uniform_real_distribution<> dist2(0, 10); // Range [0, 1]
+    std::uniform_real_distribution<> dist2(0, 10); // Range [0, 10]
 
 
-    auto producerFunc1 = [&](int id)
-    {
-        for (int i = 0; i < 10; i++)
+    auto producerFunc1 = [&] (int id)
         {
-            logger.log(21, "Hello from the logger(%d) %d, this is PI=%.3f random double = %.5f  and %s", id, i, test, dist2(gen),
-                        "first");
-            logger.log(21, "Hello from the logger(%d) %d, this is PI=%.3f random double = %.5f  and %s", id, i, test, dist2(gen),
-                        "another");
-        }
-    };
+            for (int i = 0; i < 10; i++)
+            {
+                logger.log(21, "Hello from the logger(%d) %d, this is PI=%.3f random double = %.5f  and %s", id, i, test, dist2(gen),
+                    "first");
+            }
+        };
 
     std::thread producer1(producerFunc1, dist(gen));
     std::thread producer2(producerFunc1, dist(gen));
@@ -42,7 +40,7 @@ int main()
     logger.log(45, "Testing a very long message %s \n", std::string(4096, 'X').c_str());
 
 
-    logger.log(23,"Finishing up");
+    logger.log(23, "Finishing up");
     logger.stop_logger();
 
     return 0;
