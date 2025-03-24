@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "cppvsdbg",
+      "request": "launch",
+      "name": "Launch async_logger_test",
+      "program": "${workspaceFolder}/build/Debug/async_logger_test.exe",
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "preLaunchTask": "build"
+    }
+  ]
+}
