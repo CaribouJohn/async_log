@@ -39,6 +39,9 @@ int main()
     producer2.join();
     producer3.join();
 
+    logger.log(45, "Testing a very long message %s \n", std::string(4096, 'X').c_str());
+
+
     logger.log(23,"Finishing up");
     logger.stop_logger();
 
